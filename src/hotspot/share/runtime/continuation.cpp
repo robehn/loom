@@ -1553,8 +1553,9 @@ freeze_result FreezeBase::finalize_freeze(const frame& callee, frame& caller, in
 
     if (lt.develop_is_enabled()) {
       LogStream ls(lt);
-      if (chunk == nullptr) ls.print_cr("no chunk");
-      else {
+      if (chunk == nullptr) {
+        ls.print_cr("no chunk");
+      } else {
         ls.print_cr("chunk barriers: %d _size: %d free size: %d",
           chunk->requires_barriers(), _size, chunk->sp() - ContinuationHelper::frame_metadata);
         chunk->print_on(&ls);
@@ -1670,7 +1671,9 @@ NOINLINE freeze_result FreezeBase::recurse_freeze_interpreted_frame(frame& f, fr
   { // TODO PD
     assert((f.at(frame::interpreter_frame_last_sp_offset) != 0) || (f.unextended_sp() == f.sp()), "");
     intptr_t* real_unextended_sp = (intptr_t*)f.at(frame::interpreter_frame_last_sp_offset);
-    if (real_unextended_sp != nullptr) f.set_unextended_sp(real_unextended_sp); // can be null at a safepoint
+    if (real_unextended_sp != nullptr) {
+      f.set_unextended_sp(real_unextended_sp); // can be null at a safepoint
+    }
   }
 #else
   Unimplemented();
@@ -1800,7 +1803,9 @@ NOINLINE freeze_result FreezeBase::recurse_freeze_stub_frame(frame& f, frame& ca
   }
 
   freeze_result result = recurse_freeze_compiled_frame(senderf, caller, 0, 0); // This might be deoptimized
-  if (UNLIKELY(result > freeze_ok_bottom)) return result;
+  if (UNLIKELY(result > freeze_ok_bottom)) {
+    return result;
+  }
   assert(result != freeze_ok_bottom, "");
   assert(!caller.is_interpreted_frame(), "");
 
@@ -2036,7 +2041,7 @@ static int freeze_epilog(JavaThread* thread, ContMirror& cont, freeze_result res
 template<typename ConfigT, bool preempt>
 static inline int freeze0(JavaThread* current, intptr_t* const sp) {
   assert(!current->cont_yield(), "");
-  assert(!current->has_pending_exception(), ""); // if (current->has_pending_exception()) return early_return(freeze_exception, current, fi);
+  assert(!current->has_pending_exception(), "");
   assert(current->deferred_updates() == nullptr || current->deferred_updates()->count() == 0, "");
   assert(!preempt || current->thread_state() == _thread_in_vm || current->thread_state() == _thread_blocked,
          "thread_state: %d %s", current->thread_state(), current->thread_state_name());
@@ -2376,8 +2381,10 @@ inline intptr_t* Thaw<ConfigT>::thaw(thaw_kind kind) {
   assert(chunk != nullptr && !chunk->is_empty(), ""); // guaranteed by prepare_thaw
 
   _barriers = ConfigT::requires_barriers(chunk);
-  return (LIKELY(can_thaw_fast(chunk))) ? thaw_fast(chunk)
-                                        : thaw_slow(chunk, kind != thaw_top);
+  intptr_t* ret_sp = (LIKELY(can_thaw_fast(chunk))) ? thaw_fast(chunk)
+                                                    : thaw_slow(chunk, kind != thaw_top);
+  assert((intptr_t)ret_sp % 16 == 0, "Must be aligned");
+  return ret_sp;
 }
 
 template <typename ConfigT>
@@ -2945,52 +2952,10 @@ void ThawBase::JVMTI_continue_cleanup(JavaThread* thread) {
 #endif // INCLUDE_JVMTI
 }
 
-// returns new top sp
-// called after preparations (stack overflow check and making room)
-template<typename ConfigT>
-static inline intptr_t* thaw0(JavaThread* thread, const thaw_kind kind) {
+#ifdef ASSERT
+void check_thaw(JavaThread* thread, int mode, bool barriers, stackChunkOop chunk, intptr_t* sp) {
   LogTarget(Trace, jvmcont) lt;
-#ifdef ASSERT
   LogStream ls(lt);
-#endif
-  // NoSafepointVerifier nsv;
-  CONT_JFR_ONLY(EventContinuationThaw event;)
-
-  if (kind != thaw_top) {
-    log_develop_trace(jvmcont)("== RETURN BARRIER");
-  }
-  log_develop_trace(jvmcont)("~~~~ thaw kind: %d sp: " INTPTR_FORMAT, kind, p2i(thread->last_continuation()->entry_sp()));
-
-  assert(thread == JavaThread::current(), "");
-
-  ContinuationEntry* entry = thread->last_continuation();
-  oop oopCont = entry->cont_oop();
-
-  assert(!jdk_internal_vm_Continuation::done(oopCont), "");
-  assert(oopCont == ContinuationHelper::get_continuation(thread), "");
-  assert(VERIFY_CONTINUATION(oopCont), "");
-
-  assert(entry->is_virtual_thread() == (entry->scope() == java_lang_VirtualThread::vthread_scope()), "");
-
-  ContMirror cont(thread, oopCont);
-  log_develop_debug(jvmcont)("THAW #" INTPTR_FORMAT " " INTPTR_FORMAT, cont.hash(), p2i((oopDesc*)oopCont));
-
-#ifdef ASSERT
-  if (lt.develop_is_enabled()) {
-    ContinuationHelper::set_anchor_to_entry(thread, cont.entry());
-    print_frames(thread, &ls);
-  }
-#endif
-
-  Thaw<ConfigT> thw(thread, cont);
-  intptr_t* const sp = thw.thaw(kind);
-  assert((intptr_t)sp % 16 == 0, "");
-
-  thread->reset_held_monitor_count();
-
-  assert(VERIFY_CONTINUATION(cont.mirror()), "");
-
-#ifdef ASSERT
   intptr_t* sp0 = sp;
   address pc0 = *(address*)(sp - frame::sender_sp_ret_address_offset());
   if (pc0 == StubRoutines::cont_interpreter_forced_preempt_return()) {
@@ -2998,10 +2963,11 @@ static inline intptr_t* thaw0(JavaThread* thread, const thaw_kind kind) {
   }
   ContinuationHelper::set_anchor(thread, sp0);
   if (lt.develop_is_enabled()) {
+    LogStream ls(lt);
     print_frames(thread, &ls);
   }
   if (LoomVerifyAfterThaw) {
-    assert(do_verify_after_thaw(thread, thw._mode, thw.barriers(), cont.tail(), tty), "");
+    assert(do_verify_after_thaw(thread, mode, barriers, chunk, tty), "");
   }
   assert(ContinuationEntry::assert_entry_frame_laid_out(thread), "");
   ContinuationHelper::clear_anchor(thread);
@@ -3010,14 +2976,55 @@ static inline intptr_t* thaw0(JavaThread* thread, const thaw_kind kind) {
     ls.print_cr("Jumping to frame (thaw):");
     frame(sp).print_on(&ls);
   }
+}
+#endif
+
+// returns new top sp
+// called after preparations (stack overflow check and making room)
+template<typename ConfigT>
+static inline intptr_t* thaw0(JavaThread* thread, const thaw_kind kind) {
+  assert(thread == JavaThread::current(), "Can only be done in current thread.");
+
+  CONT_JFR_ONLY(EventContinuationThaw event;)
+
+  ContinuationEntry* entry = thread->last_continuation();
+  oop oopCont = entry->cont_oop();
+
+  assert(!jdk_internal_vm_Continuation::done(oopCont), "");
+  assert(oopCont == ContinuationHelper::get_continuation(thread), "");
+  assert(VERIFY_CONTINUATION(oopCont), "");
+  assert(entry->is_virtual_thread() == (entry->scope() == java_lang_VirtualThread::vthread_scope()), "");
+  
+  ContMirror cont(thread, oopCont);
+  
+  log_develop_debug(jvmcont)("Thaw start, kind: %d sp: " INTPTR_FORMAT " hash: " INTPTR_FORMAT " oop: " INTPTR_FORMAT, kind, p2i(thread->last_continuation()->entry_sp()), cont.hash(), p2i((oopDesc*)oopCont));
+
+#ifdef ASSERT
+  LogTarget(Trace, jvmcont) lt;
+  if (lt.develop_is_enabled()) {
+    LogStream ls(lt);
+    ContinuationHelper::set_anchor_to_entry(thread, cont.entry());
+    print_frames(thread, &ls);
+  }
+#endif
+
+  Thaw<ConfigT> thw(thread, cont);
+  intptr_t* const thawed_sp = thw.thaw(kind);
+
+  thread->reset_held_monitor_count();
+
+  assert(VERIFY_CONTINUATION(cont.mirror()), "");
+
+#ifdef ASSERT
+  check_thaw(thread, thw._mode, thw.barriers(), cont.tail(), thawed_sp);
+  assert(VERIFY_CONTINUATION(cont.mirror()), "");
 #endif
 
   CONT_JFR_ONLY(cont.post_jfr_event(&event, thread);)
 
-  assert(VERIFY_CONTINUATION(cont.mirror()), "");
-  log_develop_debug(jvmcont)("=== End of thaw #" INTPTR_FORMAT, cont.hash());
+  log_develop_debug(jvmcont)("Thaw " INTPTR_FORMAT " completed", cont.hash());
 
-  return sp;
+  return thawed_sp;
 }
 
 #ifdef ASSERT
@@ -3191,7 +3198,9 @@ static void print_frame_layout(const frame& f, outputStream* st) {
 
 static void print_frames(JavaThread* thread, outputStream* st) {
   st->print_cr("------- frames ---------");
-  if (!thread->has_last_Java_frame()) st->print_cr("NO ANCHOR!");
+  if (!thread->has_last_Java_frame()) {
+    st->print_cr("NO ANCHOR!");
+  }
 
   RegisterMap map(thread, true, true, false);
   map.set_include_argument_oops(false);
