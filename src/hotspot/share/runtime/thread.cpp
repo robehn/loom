@@ -803,7 +803,9 @@ void JavaThread::set_vthread(oop p) {
 }
 
 oop JavaThread::jvmti_vthread() const {
-  return _jvmti_vthread.resolve();
+  oop ret = _jvmti_vthread.resolve();
+  if (ret == NULL) return vthread();
+  return ret;
 }
 
 void JavaThread::set_jvmti_vthread(oop p) {
@@ -2375,7 +2377,10 @@ void JavaThread::print_stack_on(outputStream* st) {
 
 #if INCLUDE_JVMTI
 // Rebind JVMTI thread state from carrier to virtual or from virtual to carrier.
-JvmtiThreadState* JavaThread::rebind_to_jvmti_thread_state_of(oop thread_oop) {
+void JavaThread::rebind_to_jvmti_thread_state_of(oop thread_oop) {
+  if (jvmti_thread_state() == NULL) {
+    return;
+  }
   set_jvmti_vthread(thread_oop);
 
   // unbind current JvmtiThreadState from JavaThread
@@ -2383,8 +2388,6 @@ JvmtiThreadState* JavaThread::rebind_to_jvmti_thread_state_of(oop thread_oop) {
 
   // bind new JvmtiThreadState to JavaThread
   JvmtiThreadState::bind_to(java_lang_Thread::jvmti_thread_state(thread_oop), this);
-
-  return jvmti_thread_state();
 }
 #endif
 

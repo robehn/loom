@@ -1626,7 +1626,7 @@ private:
 
 #if INCLUDE_JVMTI
   // Rebind JVMTI thread state from carrier to virtual or from virtual to carrier.
-  JvmtiThreadState *rebind_to_jvmti_thread_state_of(oop thread_oop);
+  void rebind_to_jvmti_thread_state_of(oop thread_oop);
 #endif
 
   // JVMTI PopFrame support
