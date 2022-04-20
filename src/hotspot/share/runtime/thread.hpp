@@ -1200,10 +1200,16 @@ private:
   bool cont_fastpath() const                   { return _cont_fastpath == NULL && _cont_fastpath_thread_state != 0; }
   bool cont_fastpath_thread_state() const      { return _cont_fastpath_thread_state != 0; }
 
-  int held_monitor_count()        { return _held_monitor_count; }
-  void reset_held_monitor_count() { _held_monitor_count = 0; }
-  void inc_held_monitor_count();
-  void dec_held_monitor_count();
+  int32_t held_monitor_count() {
+    assert(_held_monitor_count >= 0, "");
+    return _held_monitor_count;
+  }
+  void clear_held_monitor_count() { 
+    assert(_held_monitor_count >= 0, "");
+	  _held_monitor_count = 0;
+  }
+  void inc_held_monitor_count(int32_t i = 1);
+  void dec_held_monitor_count(int32_t i = 1);
 
   inline bool is_vthread_mounted() const;
   inline const ContinuationEntry* vthread_continuation() const;

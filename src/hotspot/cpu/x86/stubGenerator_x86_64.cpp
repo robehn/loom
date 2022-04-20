@@ -8228,7 +8228,7 @@ void fill_continuation_entry(MacroAssembler* masm) {
   __ movl(Address(rsp, ContinuationEntry::parent_held_monitor_count_offset()), rax);
 
   __ movptr(Address(r15_thread, JavaThread::cont_fastpath_offset()), 0);
-  __ reset_held_monitor_count(r15_thread);
+  __ movl(Address(r15_thread, JavaThread::held_monitor_count_offset()), 0);
 }
 
 // on entry, rsp points to the ContinuationEntry

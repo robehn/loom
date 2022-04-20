@@ -2029,9 +2029,10 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
   const Register old_hdr  = r13;  // value of old header at unlock time
 
   Label slow_path_lock;
-  Label lock_done;
+  Label lock_done, count_mon;
 
   if (method->is_synchronized()) {
+    Label count_mon;
 
     const int mark_word_offset = BasicLock::displaced_header_offset_in_bytes();
 
@@ -2046,6 +2047,7 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
     __ movptr(obj_reg, Address(oop_handle_reg, 0));
 
     if (!UseHeavyMonitors) {
+
       // Load immediate 1 into swap_reg %rax
       __ movl(swap_reg, 1);
 
@@ -2058,7 +2060,7 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
       // src -> dest iff dest == rax else rax <- dest
       __ lock();
       __ cmpxchgptr(lock_reg, Address(obj_reg, oopDesc::mark_offset_in_bytes()));
-      __ jcc(Assembler::equal, lock_done);
+      __ jcc(Assembler::equal, count_mon);
 
       // Hmm should this move to the slow path code area???
 
@@ -2080,6 +2082,8 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
     } else {
       __ jmp(slow_path_lock);
     }
+    __ bind(count_mon);
+    __ incrementl(Address(r15_thread, JavaThread::held_monitor_count_offset()));
 
     // Slow path will re-enter here
     __ bind(lock_done);
@@ -2184,12 +2188,12 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
     // Get locked oop from the handle we passed to jni
     __ movptr(obj_reg, Address(oop_handle_reg, 0));
 
-    Label done;
+    Label count_mon;
 
     if (!UseHeavyMonitors) {
       // Simple recursive lock?
       __ cmpptr(Address(rsp, lock_slot_offset * VMRegImpl::stack_slot_size), (int32_t)NULL_WORD);
-      __ jcc(Assembler::equal, done);
+      __ jcc(Assembler::equal, count_mon);
     }
 
     // Must save rax if it is live now because cmpxchg must use it
@@ -2212,13 +2216,14 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
       __ jmp(slow_path_unlock);
     }
 
+    __ bind(count_mon);
+    __ decrementl(Address(r15_thread, JavaThread::held_monitor_count_offset()));
+
     // slow path re-enters here
     __ bind(unlock_done);
     if (ret_type != T_FLOAT && ret_type != T_DOUBLE && ret_type != T_VOID) {
       restore_native_result(masm, ret_type, stack_slots);
     }
-
-    __ bind(done);
   }
   {
     SkipIfEqual skip(masm, &DTraceMethodProbes, false);

@@ -460,7 +460,7 @@ void C2_MacroAssembler::fast_lock(Register objReg, Register boxReg, Register tmp
   //    -- by other
   //
 
-  Label IsInflated, DONE_LABEL;
+  Label IsInflated, DONE_LABEL, NO_COUNT;
 
   if (DiagnoseSyncOnValueBasedClasses != 0) {
     load_klass(tmpReg, objReg, cx1Reg);
@@ -584,7 +584,19 @@ void C2_MacroAssembler::fast_lock(Register objReg, Register boxReg, Register tmp
   // Unfortunately none of our alignment mechanisms suffice.
   bind(DONE_LABEL);
 
-  // At DONE_LABEL the icc ZFlag is set as follows ...
+  // ZFlag == 1 count in fast path
+  // ZFlag == 0 count in slow path
+  jcc(Assembler::notZero, NO_COUNT); // jump if ZFlag == 0
+
+  // Count monitors in fast path
+  Register thread = NOT_LP64(tmpReg) LP64_ONLY(r15_thread);
+  NOT_LP64(get_thread(thread);)
+  incrementl(Address(thread, JavaThread::held_monitor_count_offset()));
+  xorl(tmpReg, tmpReg); // Set ZF == 1
+
+  bind(NO_COUNT);
+
+  // At NO_COUNT the icc ZFlag is set as follows ...
   // fast_unlock uses the same protocol.
   // ZFlag == 1 -> Success
   // ZFlag == 0 -> Failure - force control through the slow path
@@ -800,6 +812,19 @@ void C2_MacroAssembler::fast_unlock(Register objReg, Register boxReg, Register t
   }
 #endif
   bind(DONE_LABEL);
+
+  Label NO_COUNT;
+  // ZFlag == 1 count in fast path
+  // ZFlag == 0 count in slow path
+  jcc(Assembler::notZero, NO_COUNT);
+
+  // Count monitors in fast path
+  Register thread = NOT_LP64(tmpReg) LP64_ONLY(r15_thread);
+  NOT_LP64(get_thread(thread);)
+  decrementl(Address(thread, JavaThread::held_monitor_count_offset()));
+  xorl(tmpReg, tmpReg); // Set ZF == 1
+
+  bind(NO_COUNT);
 }
 
 //-------------------------------------------------------------------------------------------

@@ -2857,20 +2857,6 @@ void MacroAssembler::pop_cont_fastpath(Register java_thread) {
   bind(done);
 }
 
-void MacroAssembler::inc_held_monitor_count(Register java_thread) {
-  if (!Continuations::enabled()) return;
-  incrementl(Address(java_thread, JavaThread::held_monitor_count_offset()));
-}
-
-void MacroAssembler::dec_held_monitor_count(Register java_thread) {
-  if (!Continuations::enabled()) return;
-  decrementl(Address(java_thread, JavaThread::held_monitor_count_offset()));
-}
-
-void MacroAssembler::reset_held_monitor_count(Register java_thread) {
-  movl(Address(java_thread, JavaThread::held_monitor_count_offset()), (int32_t)0);
-}
-
 #ifdef ASSERT
 void MacroAssembler::stop_if_in_cont(Register cont, const char* name) {
 #ifdef _LP64

@@ -1472,7 +1472,7 @@ void JavaThread::exit(bool destroy_vm, ExitType exit_type) {
     assert(!this->has_pending_exception(), "release_monitors should have cleared");
   }
 
-  assert(!Continuations::enabled() || this->held_monitor_count() == 0, "held monitor count should be zero");
+  assert(this->held_monitor_count() == 0, "held monitor count should be zero: %d", this->held_monitor_count());
 
   // These things needs to be done while we are still a Java Thread. Make sure that thread
   // is in a consistent state, in case GC happens
@@ -2438,19 +2438,15 @@ void JavaThread::trace_stack() {
 
 #endif // PRODUCT
 
-void JavaThread::inc_held_monitor_count() {
-  if (!Continuations::enabled()) {
-    return;
-  }
-  _held_monitor_count++;
+void JavaThread::inc_held_monitor_count(int32_t i) {
+  assert(_held_monitor_count >= 0, "");
+  _held_monitor_count += i;
 }
 
-void JavaThread::dec_held_monitor_count() {
-  if (!Continuations::enabled()) {
-    return;
-  }
+void JavaThread::dec_held_monitor_count(int32_t i) {
   assert(_held_monitor_count > 0, "");
-  _held_monitor_count--;
+  _held_monitor_count -= i;
+  assert(_held_monitor_count >= 0, "");
 }
 
 frame JavaThread::vthread_last_frame() {

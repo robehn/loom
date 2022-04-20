@@ -1401,7 +1401,8 @@ static inline int freeze_internal(JavaThread* current, intptr_t* const sp) {
 
   assert(entry->is_virtual_thread() == (entry->scope() == java_lang_VirtualThread::vthread_scope()), "");
 
-  assert(monitors_on_stack(current) == (current->held_monitor_count() > 0), "");
+  assert(!monitors_on_stack(current) ||
+         (monitors_on_stack(current) && (current->held_monitor_count() > 0)), "Monitor mismatch");
 
   if (entry->is_pinned() || current->held_monitor_count() > 0) {
     log_develop_debug(continuations)("PINNED due to critical section/hold monitor");
@@ -2238,7 +2239,7 @@ static inline intptr_t* thaw_internal(JavaThread* thread, const Continuation::th
   assert(is_aligned(sp, frame::frame_alignment), "");
 
   // All the frames have been thawed so we know they don't hold any monitors
-  thread->reset_held_monitor_count();
+  thread->clear_held_monitor_count();
 
 #ifdef ASSERT
   intptr_t* sp0 = sp;

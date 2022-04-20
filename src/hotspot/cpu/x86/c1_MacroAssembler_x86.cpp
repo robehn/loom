@@ -95,6 +95,11 @@ int C1_MacroAssembler::lock_object(Register hdr, Register obj, Register disp_hdr
   jcc(Assembler::notZero, slow_case);
   // done
   bind(done);
+
+  Register thread = NOT_LP64(rsi) LP64_ONLY(r15_thread);
+  NOT_LP64(get_thread(thread);)
+  incrementl(Address(thread, JavaThread::held_monitor_count_offset()));
+
   return null_check_offset;
 }
 
@@ -126,6 +131,10 @@ void C1_MacroAssembler::unlock_object(Register hdr, Register obj, Register disp_
   jcc(Assembler::notEqual, slow_case);
   // done
   bind(done);
+
+  Register thread = NOT_LP64(rsi) LP64_ONLY(r15_thread);
+  NOT_LP64(get_thread(thread);)
+  decrementl(Address(thread, JavaThread::held_monitor_count_offset()));
 }
 
 
