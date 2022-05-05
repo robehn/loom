@@ -1069,11 +1069,11 @@ const intx ObjectAlignmentInBytes = 8;
   product(bool, ErrorFileToStdout, false,                                   \
           "If true, error data is printed to stdout instead of a file")     \
                                                                             \
-  product(bool, UseHeavyMonitors, false,                                    \
+  product(bool, UseHeavyMonitors, true,                                     \
           "(Deprecated) Use heavyweight instead of lightweight Java "       \
           "monitors")                                                       \
                                                                             \
-  develop(bool, VerifyHeavyMonitors, false,                                 \
+  develop(bool, VerifyHeavyMonitors, true,                                  \
           "Checks that no stack locking happens when using "                \
           "+UseHeavyMonitors")                                              \
                                                                             \

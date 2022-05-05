@@ -1054,7 +1054,10 @@ class JavaThread: public Thread {
   intptr_t* _cont_fastpath; // the sp of the oldest known interpreted/call_stub frame inside the
                             // continuation that we know about
   int _cont_fastpath_thread_state; // whether global thread state allows continuation fastpath (JVMTI)
-  int _held_monitor_count;  // used by continuations for fast lock detection
+  // It's unsigned for error detection.
+  int32_t _held_monitor_count;  // used by continuations for fast lock detection
+  // Can be negative when not using CheckJNICalls.
+  int32_t _jni_monitor_count;
 private:
 
   friend class VMThread;
@@ -1201,15 +1204,17 @@ private:
   bool cont_fastpath_thread_state() const      { return _cont_fastpath_thread_state != 0; }
 
   int32_t held_monitor_count() {
-    assert(_held_monitor_count >= 0, "");
     return _held_monitor_count;
   }
-  void clear_held_monitor_count() { 
-    assert(_held_monitor_count >= 0, "");
+  void clear_held_monitor_count() {
 	  _held_monitor_count = 0;
   }
-  void inc_held_monitor_count(int32_t i = 1);
-  void dec_held_monitor_count(int32_t i = 1);
+  void inc_held_monitor_count(bool jni = false, int32_t i = 1);
+  void dec_held_monitor_count(bool jni = false, int32_t i = 1);
+
+  int32_t jni_monitor_count() {
+    return _held_monitor_count;
+  }
 
   inline bool is_vthread_mounted() const;
   inline const ContinuationEntry* vthread_continuation() const;
