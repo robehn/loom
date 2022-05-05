@@ -1401,8 +1401,9 @@ static inline int freeze_internal(JavaThread* current, intptr_t* const sp) {
 
   assert(entry->is_virtual_thread() == (entry->scope() == java_lang_VirtualThread::vthread_scope()), "");
 
-  assert(!monitors_on_stack(current) ||
-         (monitors_on_stack(current) && (current->held_monitor_count() > 0)), "Monitor mismatch");
+  assert(
+      (monitors_on_stack(current) && ((current->held_monitor_count() - current->jni_monitor_count()) > 0)) ||
+      (!monitors_on_stack(current) && ((current->held_monitor_count() - current->jni_monitor_count()) <= 0)), "Monitor mismatch");
 
   if (entry->is_pinned() || current->held_monitor_count() > 0) {
     log_develop_debug(continuations)("PINNED due to critical section/hold monitor");

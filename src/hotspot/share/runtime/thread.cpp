@@ -1472,20 +1472,21 @@ void JavaThread::exit(bool destroy_vm, ExitType exit_type) {
     assert(!this->has_pending_exception(), "release_monitors should have cleared");
   }
 
-  // Since above code do not release JNI monitors and if someone forgot to do an JNI monitorexit,
-  // held count should be equal jni count.
-  // Negative JNI count means double unlock, can only happen when CheckJNICalls is off.
-  // TODO Scan all object monitor for this owner if JNI count > 0.
+  // Since above code do not release JNI monitors and if someone forgot to do an
+  // JNI monitorexit, held count should be equal jni count. Negative JNI count
+  // means double unlock, can only happen when CheckJNICalls is off.
+  // TODO Scan all object monitor for this owner if JNI count > 0 (at least on detach).
   assert(this->held_monitor_count() == 0 || this->jni_monitor_count() > 0,
          "held monitor count should be zero: " UINT32_FORMAT " jni:" INT32_FORMAT,
          this->held_monitor_count(), this->jni_monitor_count());
-  assert(this->jni_monitor_count()  == 0 || this->held_monitor_count() == this->jni_monitor_count(),
+  assert(this->jni_monitor_count()  == 0 || (this->held_monitor_count() == this->jni_monitor_count()),
          "held monitor count should be equal to jni: " UINT32_FORMAT " != " INT32_FORMAT,
          this->held_monitor_count(), this->jni_monitor_count());
   if (CheckJNICalls) {
-    log_error(jni)("JavaThread %s (tid: " UINTX_FORMAT ") with an Object still locked by JNI MonitorEnter.",
-      exit_type == JavaThread::normal_exit ? "exiting" : "detaching",
-      os::current_thread_id());
+    // We would like a fatal here, but due to we never checked this before there
+    // is a lot of test which breaks, even with an error log.
+    log_debug(jni)("JavaThread %s (tid: " UINTX_FORMAT ") with an Object still locked by JNI MonitorEnter.",
+      exit_type == JavaThread::normal_exit ? "exiting" : "detaching", os::current_thread_id());
   }
 
   // These things needs to be done while we are still a Java Thread. Make sure that thread
