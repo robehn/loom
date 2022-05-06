@@ -1401,9 +1401,13 @@ static inline int freeze_internal(JavaThread* current, intptr_t* const sp) {
 
   assert(entry->is_virtual_thread() == (entry->scope() == java_lang_VirtualThread::vthread_scope()), "");
 
-  assert(
-      (monitors_on_stack(current) && ((current->held_monitor_count() - current->jni_monitor_count()) > 0)) ||
-      (!monitors_on_stack(current) && ((current->held_monitor_count() - current->jni_monitor_count()) <= 0)), "Monitor mismatch");
+#ifdef ASSERT
+  if (monitors_on_stack(current)) {
+    assert(current->held_monitor_count() > current->jni_monitor_count(), "Must be: " INT32_FORMAT " > " INT32_FORMAT, current->held_monitor_count(), current->jni_monitor_count());
+  } else {
+    assert(current->held_monitor_count() == current->jni_monitor_count(), "Must be: " INT32_FORMAT " == " INT32_FORMAT, current->held_monitor_count(), current->jni_monitor_count());
+  }
+#endif
 
   if (entry->is_pinned() || current->held_monitor_count() > 0) {
     log_develop_debug(continuations)("PINNED due to critical section/hold monitor");
